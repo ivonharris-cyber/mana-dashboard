@@ -359,6 +359,16 @@ const specialAgentSeeds = [
     host: 'local',
     subnet_id: 'local-lan',
   },
+  {
+    id: 'delivery-vps',
+    name: 'Delivery',
+    display_name: 'Delivery',
+    model: 'llama3.1:8b',
+    color: '#10B981',
+    role_desc: 'Content delivery pipeline — ComfyUI + Brandulate orchestration on VPS',
+    host: 'vps',
+    subnet_id: 'vps-main',
+  },
 ];
 for (const b of specialAgentSeeds) {
   const exists = db.prepare('SELECT id FROM agents WHERE id = ?').get(b.id);
