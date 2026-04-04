@@ -11,6 +11,7 @@ import ServicesPage from './pages/ServicesPage'
 import SessionsPage from './pages/SessionsPage'
 import NetworkPage from './pages/NetworkPage'
 import IslandPage from './pages/IslandPage'
+import StudioPage from './pages/StudioPage'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/workflows" element={<WorkflowsPage />} />
         <Route path="/network" element={<NetworkPage />} />
         <Route path="/island" element={<IslandPage />} />
+        <Route path="/studio" element={<StudioPage />} />
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
       </Route>
