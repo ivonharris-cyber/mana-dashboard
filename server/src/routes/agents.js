@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { EVOLUTION_STAGES, xpForNextLevel, getStageForLevel, awardXP } from '../evolution.js';
 
 const router = Router();
 
@@ -182,6 +183,104 @@ router.put('/:id/soul', (req, res) => {
   } catch (err) {
     console.error('[Agents] Write soul error:', err.message);
     res.status(500).json({ error: 'Failed to write SOUL.md' });
+  }
+});
+
+// GET /api/agents/:id/evolution - get evolution stats + XP progress
+router.get('/:id/evolution', (req, res) => {
+  try {
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const stage = getStageForLevel(agent.level || 1);
+    const xpNeeded = xpForNextLevel(agent.level || 1);
+    const memoryCount = db.prepare('SELECT COUNT(*) as count FROM agent_memories WHERE agent_id = ?').get(req.params.id).count;
+
+    res.json({
+      level: agent.level || 1,
+      xp: agent.xp || 0,
+      xpNeeded,
+      xpPercent: Math.round(((agent.xp || 0) / xpNeeded) * 100),
+      stage: stage.id,
+      stageLabel: stage.label,
+      stageColor: stage.color,
+      memoryCapacity: stage.memoryCapacity,
+      memoryUsed: memoryCount,
+      totalInteractions: agent.total_interactions || 0,
+      stages: EVOLUTION_STAGES,
+    });
+  } catch (err) {
+    console.error('[Agents] Evolution error:', err.message);
+    res.status(500).json({ error: 'Failed to get evolution data' });
+  }
+});
+
+// GET /api/agents/:id/memories - list memory bank entries
+router.get('/:id/memories', (req, res) => {
+  try {
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const limit = parseInt(req.query.limit) || 100;
+    const memories = db.prepare(
+      'SELECT * FROM agent_memories WHERE agent_id = ? ORDER BY importance DESC, created_at DESC LIMIT ?'
+    ).all(req.params.id, limit);
+
+    const capacity = agent.memory_capacity || 10;
+    res.json({ memories, capacity, used: memories.length });
+  } catch (err) {
+    console.error('[Agents] Memories list error:', err.message);
+    res.status(500).json({ error: 'Failed to list memories' });
+  }
+});
+
+// POST /api/agents/:id/memories - add a memory entry
+router.post('/:id/memories', (req, res) => {
+  try {
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const { content, type, importance, source } = req.body;
+    if (!content) return res.status(400).json({ error: 'content is required' });
+
+    const capacity = agent.memory_capacity || 10;
+    const currentCount = db.prepare('SELECT COUNT(*) as count FROM agent_memories WHERE agent_id = ?').get(req.params.id).count;
+
+    // If at capacity, remove lowest importance oldest entry
+    if (currentCount >= capacity) {
+      db.prepare(
+        'DELETE FROM agent_memories WHERE id = (SELECT id FROM agent_memories WHERE agent_id = ? ORDER BY importance ASC, created_at ASC LIMIT 1)'
+      ).run(req.params.id);
+    }
+
+    const result = db.prepare(
+      'INSERT INTO agent_memories (agent_id, type, content, importance, source) VALUES (?, ?, ?, ?, ?)'
+    ).run(req.params.id, type || 'fact', content, importance || 1, source || 'manual');
+
+    // Award XP for learning
+    const evo = awardXP(db, req.params.id, 'memory_add');
+
+    const memory = db.prepare('SELECT * FROM agent_memories WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json({ memory, evolution: evo });
+  } catch (err) {
+    console.error('[Agents] Memory add error:', err.message);
+    res.status(500).json({ error: 'Failed to add memory' });
+  }
+});
+
+// DELETE /api/agents/:id/memories/:memoryId - remove a memory entry
+router.delete('/:id/memories/:memoryId', (req, res) => {
+  try {
+    const memory = db.prepare('SELECT * FROM agent_memories WHERE id = ? AND agent_id = ?').get(
+      req.params.memoryId, req.params.id
+    );
+    if (!memory) return res.status(404).json({ error: 'Memory not found' });
+
+    db.prepare('DELETE FROM agent_memories WHERE id = ?').run(req.params.memoryId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Agents] Memory delete error:', err.message);
+    res.status(500).json({ error: 'Failed to delete memory' });
   }
 });
 

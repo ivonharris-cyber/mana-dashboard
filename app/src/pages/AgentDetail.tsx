@@ -9,6 +9,10 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Zap,
+  Brain,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 
 interface Agent {
@@ -17,9 +21,45 @@ interface Agent {
   model: string
   status: string
   color: string
-  role?: string
+  role_desc?: string
   telegram_token?: string
   telegram_active?: boolean
+  level?: number
+  xp?: number
+  evolution_stage?: string
+  memory_capacity?: number
+  total_interactions?: number
+}
+
+interface EvolutionData {
+  level: number
+  xp: number
+  xpNeeded: number
+  xpPercent: number
+  stage: string
+  stageLabel: string
+  stageColor: string
+  memoryCapacity: number
+  memoryUsed: number
+  totalInteractions: number
+  stages: { id: string; label: string; minLevel: number; memoryCapacity: number; color: string }[]
+}
+
+interface Memory {
+  id: number
+  agent_id: string
+  type: string
+  content: string
+  importance: number
+  source: string
+  created_at: string
+}
+
+const STAGE_ICONS: Record<string, string> = {
+  seed: '\u{1F331}',
+  sprout: '\u{1F33F}',
+  bloom: '\u{1F33A}',
+  tane: '\u{1F333}',
 }
 
 const MODEL_OPTIONS = [
@@ -36,7 +76,9 @@ const MODEL_OPTIONS = [
   'grok-1',
 ]
 
-const TABS = ['SOUL.md', 'Model', 'Telegram', 'History'] as const
+const MEMORY_TYPES = ['fact', 'conversation', 'skill', 'insight', 'directive']
+
+const TABS = ['SOUL.md', 'Model', 'Memory Bank', 'Telegram', 'History'] as const
 type TabName = (typeof TABS)[number]
 
 export default function AgentDetail() {
@@ -63,13 +105,25 @@ export default function AgentDetail() {
   const [telegramSaving, setTelegramSaving] = useState(false)
   const [telegramSaved, setTelegramSaved] = useState(false)
 
+  // Evolution state
+  const [evolution, setEvolution] = useState<EvolutionData | null>(null)
+
+  // Memory bank state
+  const [memories, setMemories] = useState<Memory[]>([])
+  const [memCapacity, setMemCapacity] = useState(10)
+  const [newMemContent, setNewMemContent] = useState('')
+  const [newMemType, setNewMemType] = useState('fact')
+  const [newMemImportance, setNewMemImportance] = useState(3)
+  const [memSaving, setMemSaving] = useState(false)
+
   const fetchAgent = useCallback(async () => {
     if (!id) return
     try {
       const data = await api.get(`/agents/${id}`)
-      setAgent(data)
-      setSelectedModel(data.model || '')
-      setTelegramToken(data.telegram_token || '')
+      const a = data?.agent || data
+      setAgent(a)
+      setSelectedModel(a.model || '')
+      setTelegramToken(a.telegram_token || '')
     } catch {
       navigate('/agents')
     } finally {
@@ -90,10 +144,33 @@ export default function AgentDetail() {
     }
   }, [id])
 
+  const fetchEvolution = useCallback(async () => {
+    if (!id) return
+    try {
+      const data = await api.get(`/agents/${id}/evolution`)
+      setEvolution(data)
+    } catch {
+      // evolution data not available
+    }
+  }, [id])
+
+  const fetchMemories = useCallback(async () => {
+    if (!id) return
+    try {
+      const data = await api.get(`/agents/${id}/memories`)
+      setMemories(data?.memories || [])
+      setMemCapacity(data?.capacity || 10)
+    } catch {
+      // no memories yet
+    }
+  }, [id])
+
   useEffect(() => {
     fetchAgent()
     fetchSoul()
-  }, [fetchAgent, fetchSoul])
+    fetchEvolution()
+    fetchMemories()
+  }, [fetchAgent, fetchSoul, fetchEvolution, fetchMemories])
 
   async function handleSaveSoul() {
     if (!id) return
@@ -104,9 +181,7 @@ export default function AgentDetail() {
       setSoulOriginal(soulContent)
       setSoulSaved(true)
       setTimeout(() => setSoulSaved(false), 2000)
-    } catch {
-      // handle error silently
-    } finally {
+    } catch { /* */ } finally {
       setSoulSaving(false)
     }
   }
@@ -120,9 +195,7 @@ export default function AgentDetail() {
       setAgent((prev) => (prev ? { ...prev, model: selectedModel } : prev))
       setModelSaved(true)
       setTimeout(() => setModelSaved(false), 2000)
-    } catch {
-      // handle error silently
-    } finally {
+    } catch { /* */ } finally {
       setModelSaving(false)
     }
   }
@@ -136,11 +209,36 @@ export default function AgentDetail() {
       setAgent((prev) => (prev ? { ...prev, telegram_token: telegramToken } : prev))
       setTelegramSaved(true)
       setTimeout(() => setTelegramSaved(false), 2000)
-    } catch {
-      // handle error silently
-    } finally {
+    } catch { /* */ } finally {
       setTelegramSaving(false)
     }
+  }
+
+  async function handleAddMemory() {
+    if (!id || !newMemContent.trim()) return
+    setMemSaving(true)
+    try {
+      await api.post(`/agents/${id}/memories`, {
+        content: newMemContent.trim(),
+        type: newMemType,
+        importance: newMemImportance,
+        source: 'manual',
+      })
+      setNewMemContent('')
+      setNewMemImportance(3)
+      fetchMemories()
+      fetchEvolution()
+    } catch { /* */ } finally {
+      setMemSaving(false)
+    }
+  }
+
+  async function handleDeleteMemory(memId: number) {
+    if (!id) return
+    try {
+      await api.delete(`/agents/${id}/memories/${memId}`)
+      fetchMemories()
+    } catch { /* */ }
   }
 
   if (loading || !agent) {
@@ -152,10 +250,12 @@ export default function AgentDetail() {
   }
 
   const soulDirty = soulContent !== soulOriginal
+  const stageIcon = STAGE_ICONS[evolution?.stage || agent.evolution_stage || 'seed']
+  const stageColor = evolution?.stageColor || '#A3E635'
 
   return (
     <div className="space-y-6 animate-fade-up">
-      {/* Header */}
+      {/* Header with Evolution */}
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate('/agents')}
@@ -163,16 +263,20 @@ export default function AgentDetail() {
         >
           <ChevronRight size={20} className="rotate-180" />
         </button>
-        <div
-          className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
-          style={{
-            backgroundColor: `${agent.color || '#6B7280'}20`,
-            color: agent.color || '#6B7280',
-          }}
-        >
-          {(agent.display_name || agent.id).charAt(0).toUpperCase()}
+        <div className="relative">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold shrink-0"
+            style={{
+              backgroundColor: `${agent.color || '#6B7280'}20`,
+              color: agent.color || '#6B7280',
+              boxShadow: (agent.level || 1) >= 10 ? `0 0 20px ${stageColor}30` : undefined,
+            }}
+          >
+            {(agent.display_name || agent.id).charAt(0).toUpperCase()}
+          </div>
+          <span className="absolute -bottom-1 -right-1 text-base">{stageIcon}</span>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-bold text-white truncate">
             {agent.display_name || agent.id}
           </h1>
@@ -181,9 +285,73 @@ export default function AgentDetail() {
               {agent.model}
             </span>
             <StatusBadge status={agent.status} size="sm" />
+            <span
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-bold"
+              style={{ backgroundColor: `${stageColor}15`, color: stageColor }}
+            >
+              <Zap size={10} />
+              Lv.{evolution?.level || agent.level || 1}
+            </span>
+            <span className="text-xs text-white/30">
+              {evolution?.stageLabel || 'Kakano'}
+            </span>
           </div>
+          {/* XP Progress Bar */}
+          {evolution && (
+            <div className="mt-2 max-w-xs">
+              <div className="flex items-center justify-between text-[10px] text-white/30 mb-0.5">
+                <span>{evolution.xp} / {evolution.xpNeeded} XP</span>
+                <span>{evolution.totalInteractions} interactions</span>
+              </div>
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${evolution.xpPercent}%`,
+                    background: `linear-gradient(90deg, ${stageColor}80, ${stageColor})`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Evolution Timeline */}
+      {evolution?.stages && (
+        <div className="flex items-center gap-1 px-2">
+          {evolution.stages.map((s, i) => {
+            const reached = (evolution.level || 1) >= s.minLevel
+            const current = evolution.stage === s.id
+            return (
+              <div key={s.id} className="flex items-center gap-1">
+                {i > 0 && (
+                  <div
+                    className="h-0.5 w-8"
+                    style={{ backgroundColor: reached ? s.color : 'rgba(255,255,255,0.05)' }}
+                  />
+                )}
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${
+                    current
+                      ? 'ring-1 ring-offset-1 ring-offset-void-black'
+                      : ''
+                  }`}
+                  style={{
+                    backgroundColor: reached ? `${s.color}15` : 'rgba(255,255,255,0.02)',
+                    color: reached ? s.color : 'rgba(255,255,255,0.2)',
+                    ringColor: current ? s.color : undefined,
+                  }}
+                >
+                  <span>{STAGE_ICONS[s.id]}</span>
+                  <span>{s.label}</span>
+                  <span className="opacity-50">Lv.{s.minLevel}+</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Tab Bar */}
       <div className="flex border-b border-white/5">
@@ -197,7 +365,15 @@ export default function AgentDetail() {
                 : 'text-white/40 hover:text-white/60'
             }`}
           >
+            {tab === 'Memory Bank' && (
+              <Brain size={12} className="inline mr-1.5 -mt-0.5" />
+            )}
             {tab}
+            {tab === 'Memory Bank' && (
+              <span className="ml-1.5 text-[10px] text-white/30">
+                {memories.length}/{memCapacity}
+              </span>
+            )}
             {activeTab === tab && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-neon-cyan" />
             )}
@@ -229,8 +405,7 @@ export default function AgentDetail() {
                 {soulSaving ? 'Saving...' : soulSaved ? 'Saved!' : 'Save'}
               </button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ height: 'calc(100vh - 300px)' }}>
-              {/* Editor */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ height: 'calc(100vh - 340px)' }}>
               <textarea
                 value={soulContent}
                 onChange={(e) => setSoulContent(e.target.value)}
@@ -238,7 +413,6 @@ export default function AgentDetail() {
                 placeholder={'# Agent SOUL.md\n\nDefine the personality, goals, and behavior rules for this agent...'}
                 spellCheck={false}
               />
-              {/* Preview */}
               <div className="h-full bg-void-gray border border-white/5 rounded-lg p-4 overflow-y-auto prose prose-invert prose-sm max-w-none prose-headings:text-neon-cyan prose-a:text-neon-blue prose-code:text-pink-400 prose-strong:text-white">
                 {soulContent ? (
                   <ReactMarkdown>{soulContent}</ReactMarkdown>
@@ -287,6 +461,143 @@ export default function AgentDetail() {
               <Save size={14} />
               {modelSaving ? 'Saving...' : modelSaved ? 'Saved!' : 'Save Model'}
             </button>
+          </div>
+        )}
+
+        {/* Memory Bank Tab */}
+        {activeTab === 'Memory Bank' && (
+          <div className="space-y-6">
+            {/* Capacity bar */}
+            <div className="bg-void-gray border border-white/5 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Brain size={16} style={{ color: stageColor }} />
+                  <span className="text-sm font-medium text-white">Memory Capacity</span>
+                </div>
+                <span className="text-sm text-white/50">
+                  {memories.length} / {memCapacity} slots
+                </span>
+              </div>
+              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, (memories.length / memCapacity) * 100)}%`,
+                    background: memories.length >= memCapacity
+                      ? 'linear-gradient(90deg, #EF4444, #DC2626)'
+                      : `linear-gradient(90deg, ${stageColor}80, ${stageColor})`,
+                  }}
+                />
+              </div>
+              <p className="text-[10px] text-white/30 mt-1.5">
+                Evolve to unlock more memory slots. Current stage: {evolution?.stageLabel || 'Kakano'}
+              </p>
+            </div>
+
+            {/* Add memory form */}
+            <div className="bg-void-gray border border-white/5 rounded-xl p-4 space-y-3">
+              <h3 className="text-sm font-medium text-white flex items-center gap-2">
+                <Plus size={14} className="text-neon-cyan" />
+                Teach New Memory
+              </h3>
+              <textarea
+                value={newMemContent}
+                onChange={(e) => setNewMemContent(e.target.value)}
+                className="w-full h-20 bg-void-black border border-white/10 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:border-neon-cyan/30 transition-colors"
+                placeholder="Teach this agent something... facts, skills, directives, insights"
+              />
+              <div className="flex items-center gap-3">
+                <select
+                  value={newMemType}
+                  onChange={(e) => setNewMemType(e.target.value)}
+                  className="bg-void-black border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-neon-cyan/50 appearance-none cursor-pointer"
+                >
+                  {MEMORY_TYPES.map((t) => (
+                    <option key={t} value={t} className="bg-void-dark">{t}</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-white/30">Importance:</span>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setNewMemImportance(n)}
+                      className={`w-6 h-6 rounded text-xs font-bold transition-colors ${
+                        n <= newMemImportance
+                          ? 'bg-neon-cyan/20 text-neon-cyan'
+                          : 'bg-white/5 text-white/20'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleAddMemory}
+                  disabled={memSaving || !newMemContent.trim()}
+                  className="ml-auto flex items-center gap-2 bg-neon-cyan text-void-black font-semibold px-4 py-2 rounded-lg hover:bg-neon-cyan/90 transition-colors text-xs disabled:opacity-30"
+                >
+                  <Brain size={12} />
+                  {memSaving ? 'Teaching...' : 'Teach'}
+                </button>
+              </div>
+            </div>
+
+            {/* Memory entries */}
+            <div className="space-y-2">
+              {memories.length === 0 ? (
+                <div className="text-center py-12">
+                  <Brain size={32} className="text-white/10 mx-auto mb-3" />
+                  <p className="text-sm text-white/30">No memories yet</p>
+                  <p className="text-xs text-white/20 mt-1">Teach this agent facts, skills, and directives</p>
+                </div>
+              ) : (
+                memories.map((mem) => {
+                  const typeColors: Record<string, string> = {
+                    fact: '#3B82F6',
+                    conversation: '#A855F7',
+                    skill: '#22C55E',
+                    insight: '#F59E0B',
+                    directive: '#EF4444',
+                  }
+                  const tc = typeColors[mem.type] || '#6B7280'
+                  return (
+                    <div
+                      key={mem.id}
+                      className="bg-void-gray border border-white/5 rounded-lg p-3 flex items-start gap-3 group"
+                    >
+                      <div
+                        className="w-1 h-full min-h-[2rem] rounded-full shrink-0"
+                        style={{ backgroundColor: tc }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                            style={{ backgroundColor: `${tc}15`, color: tc }}
+                          >
+                            {mem.type}
+                          </span>
+                          <span className="text-[10px] text-white/20">
+                            imp: {mem.importance}/5
+                          </span>
+                          <span className="text-[10px] text-white/20">
+                            {mem.source}
+                          </span>
+                        </div>
+                        <p className="text-sm text-white/70">{mem.content}</p>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteMemory(mem.id) }}
+                        className="text-white/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         )}
 

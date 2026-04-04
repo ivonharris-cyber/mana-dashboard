@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import StatusBadge from '../components/StatusBadge'
 import InstallAgentModal from '../components/InstallAgentModal'
-import { Plus, RefreshCw, Bot } from 'lucide-react'
+import { Plus, RefreshCw, Bot, Zap } from 'lucide-react'
 
 interface Agent {
   id: string
@@ -11,7 +11,23 @@ interface Agent {
   model: string
   status: string
   color: string
-  role?: string
+  role_desc?: string
+  level?: number
+  xp?: number
+  evolution_stage?: string
+  memory_capacity?: number
+  total_interactions?: number
+}
+
+const STAGE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  seed:   { label: 'Kakano',  icon: '\u{1F331}', color: '#A3E635' },
+  sprout: { label: 'Pihi',    icon: '\u{1F33F}', color: '#22C55E' },
+  bloom:  { label: 'Puawai',  icon: '\u{1F33A}', color: '#A855F7' },
+  tane:   { label: 'Tane',    icon: '\u{1F333}', color: '#F59E0B' },
+}
+
+function xpForNextLevel(level: number) {
+  return level * 100
 }
 
 export default function AgentsPage() {
@@ -76,42 +92,93 @@ export default function AgentsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              onClick={() => navigate(`/agents/${agent.id}`)}
-              className="bg-void-gray border border-white/5 rounded-xl p-6 hover:border-white/10 cursor-pointer transition-all group relative"
-            >
-              {/* Avatar */}
-              <div className="flex items-start gap-4">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
-                  style={{
-                    backgroundColor: `${agent.color || '#6B7280'}20`,
-                    color: agent.color || '#6B7280',
-                  }}
-                >
-                  {(agent.display_name || agent.id).charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-lg font-bold text-white truncate group-hover:text-neon-cyan transition-colors">
-                    {agent.display_name || agent.id}
-                  </h3>
-                  <span className="inline-block text-xs bg-white/5 text-white/50 px-2 py-1 rounded mt-1">
-                    {agent.model}
-                  </span>
-                  {agent.role && (
-                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{agent.role}</p>
-                  )}
-                </div>
-              </div>
+          {agents.map((agent) => {
+            const level = agent.level || 1
+            const xp = agent.xp || 0
+            const xpNeeded = xpForNextLevel(level)
+            const xpPercent = Math.min(100, Math.round((xp / xpNeeded) * 100))
+            const stage = STAGE_CONFIG[agent.evolution_stage || 'seed'] || STAGE_CONFIG.seed
 
-              {/* Status */}
-              <div className="absolute bottom-4 right-4">
-                <StatusBadge status={agent.status} size="sm" />
+            return (
+              <div
+                key={agent.id}
+                onClick={() => navigate(`/agents/${agent.id}`)}
+                className="bg-void-gray border border-white/5 rounded-xl p-6 hover:border-white/10 cursor-pointer transition-all group relative overflow-hidden"
+              >
+                {/* Evolution glow on high level */}
+                {level >= 10 && (
+                  <div
+                    className="absolute inset-0 opacity-[0.03] pointer-events-none"
+                    style={{ background: `radial-gradient(ellipse at 50% 0%, ${stage.color}, transparent 70%)` }}
+                  />
+                )}
+
+                {/* Avatar + Info */}
+                <div className="flex items-start gap-4">
+                  <div className="relative">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0"
+                      style={{
+                        backgroundColor: `${agent.color || '#6B7280'}20`,
+                        color: agent.color || '#6B7280',
+                      }}
+                    >
+                      {(agent.display_name || agent.id).charAt(0).toUpperCase()}
+                    </div>
+                    {/* Evolution stage icon */}
+                    <span
+                      className="absolute -bottom-1 -right-1 text-sm"
+                      title={`${stage.label} (Lv.${level})`}
+                    >
+                      {stage.icon}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-bold text-white truncate group-hover:text-neon-cyan transition-colors">
+                      {agent.display_name || agent.id}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-block text-xs bg-white/5 text-white/50 px-2 py-0.5 rounded">
+                        {agent.model}
+                      </span>
+                      <span
+                        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded font-medium"
+                        style={{ backgroundColor: `${stage.color}15`, color: stage.color }}
+                      >
+                        <Zap size={10} />
+                        Lv.{level}
+                      </span>
+                    </div>
+                    {agent.role_desc && (
+                      <p className="text-sm text-gray-400 mt-2 line-clamp-2">{agent.role_desc}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* XP Bar */}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-[10px] text-white/30 mb-1">
+                    <span>{stage.label}</span>
+                    <span>{xp}/{xpNeeded} XP</span>
+                  </div>
+                  <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${xpPercent}%`,
+                        background: `linear-gradient(90deg, ${stage.color}80, ${stage.color})`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="absolute top-4 right-4">
+                  <StatusBadge status={agent.status} size="sm" />
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

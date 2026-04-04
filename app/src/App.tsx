@@ -9,6 +9,8 @@ import RelayPage from './pages/RelayPage'
 import WorkflowsPage from './pages/WorkflowsPage'
 import ServicesPage from './pages/ServicesPage'
 import SessionsPage from './pages/SessionsPage'
+import NetworkPage from './pages/NetworkPage'
+import IslandPage from './pages/IslandPage'
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
         <Route path="/agents/:id" element={<AgentDetail />} />
         <Route path="/relay" element={<RelayPage />} />
         <Route path="/workflows" element={<WorkflowsPage />} />
+        <Route path="/network" element={<NetworkPage />} />
+        <Route path="/island" element={<IslandPage />} />
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
       </Route>

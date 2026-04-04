@@ -8,6 +8,8 @@ import {
   GitBranch,
   Activity,
   Monitor,
+  Network,
+  Palmtree,
   LogOut,
   Menu,
   X,
@@ -16,6 +18,8 @@ import {
 const navItems = [
   { label: 'Command Center', path: '/', icon: Home },
   { label: 'Agents', path: '/agents', icon: Bot },
+  { label: 'Network', path: '/network', icon: Network },
+  { label: 'Island', path: '/island', icon: Palmtree },
   { label: 'Relay', path: '/relay', icon: Radio },
   { label: 'Workflows', path: '/workflows', icon: GitBranch },
   { label: 'Services', path: '/services', icon: Activity },
@@ -25,6 +29,8 @@ const navItems = [
 const pageTitles: Record<string, string> = {
   '/': 'Command Center',
   '/agents': 'Agents',
+  '/network': 'Network',
+  '/island': 'Mana Island',
   '/relay': 'Relay',
   '/workflows': 'Workflows',
   '/services': 'Services',

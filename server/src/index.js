@@ -16,6 +16,11 @@ import servicesRoutes from './routes/services.js';
 import relayRoutes, { setIO } from './routes/relay.js';
 import workflowRoutes from './routes/workflows.js';
 import sessionRoutes from './routes/sessions.js';
+import networkRoutes from './routes/network.js';
+import botRoutes from './routes/bots.js';
+import pipelineRoutes from './routes/pipeline.js';
+import obsidianRoutes from './routes/obsidian.js';
+import { setBotIO, stopAllBots } from './bot-runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,8 +41,9 @@ const io = new SocketIOServer(server, {
   }
 });
 
-// Share io with relay routes
+// Share io with relay routes + bot runner
 setIO(io);
+setBotIO(io);
 
 // ── Middleware ──────────────────────────────────────────────────────────
 
@@ -90,6 +96,10 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/relay', relayRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/network', networkRoutes);
+app.use('/api/bots', botRoutes);
+app.use('/api/pipeline', pipelineRoutes);
+app.use('/api/obsidian', obsidianRoutes);
 
 // API health endpoint (no auth required)
 app.get('/api/health', (req, res) => {
@@ -215,6 +225,7 @@ server.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n[Server] Shutting down...');
+  stopAllBots();
   io.close();
   db.close();
   server.close(() => {
@@ -225,6 +236,7 @@ process.on('SIGINT', () => {
 
 process.on('SIGTERM', () => {
   console.log('\n[Server] SIGTERM received...');
+  stopAllBots();
   io.close();
   db.close();
   server.close(() => {
