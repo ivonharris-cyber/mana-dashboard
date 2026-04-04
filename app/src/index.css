@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-void-black text-white font-display antialiased;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0A0A0F; }
+  ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 3px; }
+}
