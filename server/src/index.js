@@ -21,6 +21,7 @@ import botRoutes from './routes/bots.js';
 import pipelineRoutes from './routes/pipeline.js';
 import obsidianRoutes from './routes/obsidian.js';
 import studioRoutes from './routes/studio.js';
+import systemRoutes from './routes/system.js';
 import { setBotIO, stopAllBots } from './bot-runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -102,6 +103,7 @@ app.use('/api/bots', botRoutes);
 app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/obsidian', obsidianRoutes);
 app.use('/api/studio', studioRoutes);
+app.use('/api/system', systemRoutes);
 
 // API health endpoint (no auth required)
 app.get('/api/health', (req, res) => {
