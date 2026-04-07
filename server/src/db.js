@@ -139,6 +139,51 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_id);
 `);
 
+// Agent activity log table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS agent_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    detail TEXT,
+    xp_gained INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_agent_activity_agent ON agent_activity(agent_id);
+`);
+
+// Studio project table additions
+db.exec(`
+  CREATE TABLE IF NOT EXISTS studio_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT DEFAULT 'video',
+    status TEXT DEFAULT 'draft',
+    description TEXT,
+    tags TEXT,
+    assets TEXT,
+    timeline TEXT,
+    social_targets TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS studio_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER,
+    name TEXT,
+    type TEXT,
+    path TEXT,
+    url TEXT,
+    metadata TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES studio_projects(id) ON DELETE CASCADE
+  );
+`);
+
+// Agent base path (env-driven, works on both Windows dev and Linux VPS)
+const AGENTS_BASE = process.env.AGENTS_BASE_PATH || '/opt/mana-dashboard/agents';
+
 // Seed admin user if not exists
 const existingAdmin = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
 if (!existingAdmin) {
@@ -225,8 +270,8 @@ if (existingAgentCount === 0) {
         agent.model,
         agent.color,
         agent.role_desc,
-        `D:/AI/openclaw/agents/${agent.id}/SOUL.md`,
-        `D:/AI/openclaw/.openclaw/agents/${agent.id}/workspace`
+        `${AGENTS_BASE}/${agent.id}/SOUL.md`,
+        `${AGENTS_BASE}/${agent.id}/workspace`
       );
     }
   });
@@ -377,7 +422,7 @@ for (const b of specialAgentSeeds) {
       INSERT INTO agents (id, name, display_name, model, color, role_desc, host, subnet_id, soul_path, workspace_path)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(b.id, b.name, b.display_name, b.model, b.color, b.role_desc, b.host, b.subnet_id,
-      `D:/AI/openclaw/agents/${b.id}/SOUL.md`, `D:/AI/openclaw/.openclaw/agents/${b.id}/workspace`);
+      `${AGENTS_BASE}/${b.id}/SOUL.md`, `${AGENTS_BASE}/${b.id}/workspace`);
     console.log(`[DB] Seeded agent: ${b.id}`);
   }
 }
@@ -393,8 +438,8 @@ if (existingSubnetBots === 0) {
       insertSubnetBot.run(
         b.id, b.name, b.display_name, b.model, b.color, b.role_desc,
         b.host, b.subnet_id,
-        `D:/AI/openclaw/agents/${b.id}/SOUL.md`,
-        `D:/AI/openclaw/.openclaw/agents/${b.id}/workspace`
+        `${AGENTS_BASE}/${b.id}/SOUL.md`,
+        `${AGENTS_BASE}/${b.id}/workspace`
       );
     }
   });

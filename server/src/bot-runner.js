@@ -52,7 +52,7 @@ export function spawnBot(agentId, options = {}) {
     : null;
 
   const port = options.port || getNextPort();
-  const ollamaUrl = options.ollamaUrl || agent.ollama_url || subnet?.ollama_url || 'http://127.0.0.1:11434';
+  const ollamaUrl = options.ollamaUrl || agent.ollama_url || subnet?.ollama_url || process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
   const dashboardUrl = options.dashboardUrl || `http://127.0.0.1:${process.env.PORT || 3003}`;
 
   const env = {

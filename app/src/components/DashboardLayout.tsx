@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  Building2,
 } from 'lucide-react'
 
 const navItems = [
@@ -26,6 +27,7 @@ const navItems = [
   { label: 'Island', path: '/island', icon: Palmtree },
   { label: 'Relay', path: '/relay', icon: Radio },
   { label: 'Workflows', path: '/workflows', icon: GitBranch },
+  { label: 'Hapai', path: '/hapai', icon: Building2 },
   { label: 'Services', path: '/services', icon: Activity },
   { label: 'Sessions', path: '/sessions', icon: Monitor },
 ]
@@ -39,6 +41,7 @@ const pageTitles: Record<string, string> = {
   '/island': 'Mana Island',
   '/relay': 'Relay',
   '/workflows': 'Workflows',
+  '/hapai': 'Hapai Intranet',
   '/services': 'Services',
   '/sessions': 'Sessions',
 }

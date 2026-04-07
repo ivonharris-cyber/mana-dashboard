@@ -48,6 +48,13 @@ async function n8nFetch(path, options = {}) {
   }
 }
 
+// GET /api/workflows/n8n-redirect - redirect to actual n8n UI
+router.get('/n8n-redirect', (req, res) => {
+  const { n8nUrl } = getN8NConfig();
+  const subPath = req.query.path || '';
+  res.redirect(`${n8nUrl}${subPath}`);
+});
+
 // GET /api/workflows - list all n8n workflows
 router.get('/', async (req, res) => {
   try {

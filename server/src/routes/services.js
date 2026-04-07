@@ -62,7 +62,8 @@ router.get('/health', async (req, res) => {
     const checks = await Promise.all([
       // Ollama
       checkService('ollama', async () => {
-        const response = await fetchWithTimeout('http://127.0.0.1:11434/api/tags', 3000);
+        const ollamaUrl = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+        const response = await fetchWithTimeout(`${ollamaUrl}/api/tags`, 3000);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         const modelCount = data.models ? data.models.length : 0;
@@ -99,9 +100,18 @@ router.get('/health', async (req, res) => {
 
       // OpenClaw
       checkService('openclaw', async () => {
-        const response = await fetchWithTimeout('http://localhost:18789/health', 3000);
+        const openclawUrl = process.env.OPENCLAW_URL || 'http://localhost:18789';
+        const response = await fetchWithTimeout(`${openclawUrl}/health`, 3000);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return 'Gateway online';
+      }),
+
+      // Hapai Intranet
+      checkService('hapai', async () => {
+        const hapaiUrl = process.env.HAPAI_URL || 'http://192.168.17.55:3000';
+        const response = await fetchWithTimeout(`${hapaiUrl}/api/health`, 3000);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return 'Intranet online';
       })
     ]);
 

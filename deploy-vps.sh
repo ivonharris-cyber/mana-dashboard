@@ -102,18 +102,22 @@ npm install --production --no-audit --no-fund
 if [[ ! -f "${REMOTE_DIR}/server/.env" ]]; then
   echo "[remote] Creating default .env..."
   cat > "${REMOTE_DIR}/server/.env" <<'ENVFILE'
-PORT=${SERVICE_PORT}
+PORT=3003
 JWT_SECRET=mana-meta-maori-2026
 N8N_URL=http://localhost:5678
 VPS_HOST=141.136.47.94
+OLLAMA_URL=http://127.0.0.1:11434
+OPENCLAW_URL=http://localhost:18789
+AGENTS_BASE_PATH=/opt/mana-dashboard/agents
 ENVFILE
   echo "[remote] .env created — edit ${REMOTE_DIR}/server/.env to customise."
 else
   echo "[remote] .env already exists, leaving it unchanged."
 fi
 
-# Create data directory if missing (for SQLite)
+# Create data + agents directories if missing
 mkdir -p "${REMOTE_DIR}/server/data"
+mkdir -p "${REMOTE_DIR}/agents"
 
 # Create a dedicated system user if running as root (optional hardening)
 if ! id -u mana-dashboard &>/dev/null 2>&1; then
@@ -148,7 +152,7 @@ SyslogIdentifier=${SERVICE_NAME}
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${REMOTE_DIR}/server/data
+ReadWritePaths=${REMOTE_DIR}/server/data ${REMOTE_DIR}/agents
 PrivateTmp=true
 
 [Install]

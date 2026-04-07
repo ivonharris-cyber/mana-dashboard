@@ -71,9 +71,9 @@ export default function WorkflowsPage() {
     setTogglingIds((prev) => new Set(prev).add(wfId))
     try {
       if (workflow.active) {
-        await api.post(`/workflows/deactivate/${wfId}`)
+        await api.post(`/workflows/${wfId}/deactivate`)
       } else {
-        await api.post(`/workflows/activate/${wfId}`)
+        await api.post(`/workflows/${wfId}/activate`)
       }
       setWorkflows((prev) =>
         prev.map((w) => (w.id === wfId ? { ...w, active: !w.active } : w))
@@ -127,7 +127,7 @@ export default function WorkflowsPage() {
             Refresh
           </button>
           <a
-            href="http://localhost:5678"
+            href="/api/workflows/n8n-redirect"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-white/5 text-white/70 hover:text-white border border-white/10 hover:border-white/20 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
@@ -155,7 +155,7 @@ export default function WorkflowsPage() {
           <GitBranch size={48} className="text-white/10 mx-auto mb-4" />
           <p className="text-white/40 text-sm">No workflows found</p>
           <a
-            href="http://localhost:5678"
+            href="/api/workflows/n8n-redirect"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 mt-4 text-neon-cyan text-sm hover:underline"
@@ -235,7 +235,7 @@ export default function WorkflowsPage() {
                     {triggeringIds.has(wf.id) ? 'Triggering...' : 'Trigger'}
                   </button>
                   <a
-                    href={`http://localhost:5678/workflow/${wf.id}`}
+                    href={`/api/workflows/n8n-redirect?path=/workflow/${wf.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-xs bg-white/5 text-white/50 hover:text-white hover:bg-white/10 px-2.5 py-1.5 rounded-lg transition-colors"

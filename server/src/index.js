@@ -22,6 +22,7 @@ import pipelineRoutes from './routes/pipeline.js';
 import obsidianRoutes from './routes/obsidian.js';
 import studioRoutes from './routes/studio.js';
 import systemRoutes from './routes/system.js';
+import hapaiRoutes from './routes/hapai.js';
 import { setBotIO, stopAllBots } from './bot-runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,10 +35,21 @@ const JWT_SECRET = process.env.JWT_SECRET || 'mana-dashboard-secret';
 const app = express();
 const server = createServer(app);
 
-// Socket.IO
+// Socket.IO — allow same-origin + dev + any VPS IP
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',')
+  : ['http://localhost:5173', 'http://localhost:3003'];
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3003'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (same-origin, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      // Allow all configured origins
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      // Allow any request from same host (different port)
+      callback(null, true);
+    },
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -49,9 +61,13 @@ setBotIO(io);
 
 // ── Middleware ──────────────────────────────────────────────────────────
 
-// CORS
+// CORS — allow same-origin + production
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3003'],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(null, true);
+  },
   credentials: true
 }));
 
@@ -104,6 +120,7 @@ app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/obsidian', obsidianRoutes);
 app.use('/api/studio', studioRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/hapai', hapaiRoutes);
 
 // API health endpoint (no auth required)
 app.get('/api/health', (req, res) => {

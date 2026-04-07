@@ -41,7 +41,8 @@ router.get('/', (req, res) => {
     params.push(limit);
 
     const messages = db.prepare(sql).all(...params);
-    res.json({ messages });
+    const total = db.prepare('SELECT COUNT(*) as count FROM relay_messages').get().count;
+    res.json({ messages, total });
   } catch (err) {
     console.error('[Relay] List error:', err.message);
     res.status(500).json({ error: 'Failed to list relay messages' });

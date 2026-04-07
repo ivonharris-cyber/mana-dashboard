@@ -11,6 +11,7 @@ import {
   RefreshCw,
   ChevronRight,
   Clock,
+  Building2,
 } from 'lucide-react'
 
 interface Agent {
@@ -73,6 +74,7 @@ export default function CommandCenter() {
   const [services, setServices] = useState<ServiceHealth[]>([])
   const [sessionCount, setSessionCount] = useState(0)
   const [relayTotal, setRelayTotal] = useState(0)
+  const [hapaiStatus, setHapaiStatus] = useState<{ status: string; url?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const relayRef = useRef<HTMLDivElement>(null)
@@ -103,6 +105,12 @@ export default function CommandCenter() {
         const arr = Array.isArray(data) ? data : data?.sessions || []
         setSessionCount(arr.length)
       }
+
+      // Hapai status (non-blocking)
+      try {
+        const hapai = await api.get('/hapai/status')
+        setHapaiStatus(hapai)
+      } catch { setHapaiStatus({ status: 'offline' }) }
     } catch {
       // silently handle
     } finally {
@@ -114,7 +122,7 @@ export default function CommandCenter() {
     fetchData()
 
     const socket = createSocket()
-    socket.on('relay:new', (msg: RelayMessage) => {
+    socket.on('relay:message', (msg: RelayMessage) => {
       setRelayMessages((prev) => [msg, ...prev].slice(0, 10))
       setRelayTotal((prev) => prev + 1)
     })
@@ -344,6 +352,43 @@ export default function CommandCenter() {
           })}
         </div>
       </div>
+      {/* Hapai Intranet Widget */}
+      {hapaiStatus && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">
+              Hapai Intranet
+            </h3>
+            <button
+              onClick={() => navigate('/hapai')}
+              className="text-xs text-neon-cyan hover:text-neon-cyan/80 flex items-center gap-1 transition-colors"
+            >
+              Open <ChevronRight size={12} />
+            </button>
+          </div>
+          <div
+            className={`rounded-xl p-4 border flex items-center gap-3 cursor-pointer hover:bg-white/[0.02] transition-colors ${
+              hapaiStatus.status === 'online' ? 'bg-green-500/5 border-green-500/15' : 'bg-red-500/5 border-red-500/15'
+            }`}
+            onClick={() => navigate('/hapai')}
+          >
+            <Building2 size={20} className={hapaiStatus.status === 'online' ? 'text-green-400' : 'text-red-400'} />
+            <div>
+              <p className={`text-sm font-medium ${hapaiStatus.status === 'online' ? 'text-green-400' : 'text-red-400'}`}>
+                {hapaiStatus.status === 'online' ? 'Intranet Online' : 'Intranet Offline'}
+              </p>
+              <p className="text-[10px] text-white/30">Tanenuiarangi Ropu / Whakapai Hauora</p>
+            </div>
+            {hapaiStatus.url && (
+              <a href={hapaiStatus.url} target="_blank" rel="noopener noreferrer"
+                className="ml-auto text-xs text-white/30 hover:text-neon-cyan transition-colors"
+                onClick={e => e.stopPropagation()}>
+                {hapaiStatus.url}
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

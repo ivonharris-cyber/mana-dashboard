@@ -97,6 +97,17 @@ export default function StudioPage() {
     } catch { /* */ }
   }
 
+  async function handlePublish(project: Project) {
+    try {
+      await api.put(`/studio/projects/${project.id}`, { status: 'published' })
+      fetchAll()
+    } catch { /* */ }
+  }
+
+  async function handlePreview(project: Project) {
+    setActiveProject(project)
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center h-64">
       <RefreshCw className="w-6 h-6 text-neon-cyan animate-spin" />
@@ -285,10 +296,12 @@ export default function StudioPage() {
                       className="flex items-center gap-1 text-[10px] text-white/30 hover:text-neon-cyan transition-colors">
                       <Download size={10} /> Filmora
                     </button>
-                    <button className="flex items-center gap-1 text-[10px] text-white/30 hover:text-purple-400 transition-colors">
+                    <button onClick={() => handlePublish(p)}
+                      className="flex items-center gap-1 text-[10px] text-white/30 hover:text-purple-400 transition-colors">
                       <Share2 size={10} /> Publish
                     </button>
-                    <button className="flex items-center gap-1 text-[10px] text-white/30 hover:text-green-400 transition-colors ml-auto">
+                    <button onClick={() => handlePreview(p)}
+                      className="flex items-center gap-1 text-[10px] text-white/30 hover:text-green-400 transition-colors ml-auto">
                       <Play size={10} /> Preview
                     </button>
                   </div>
@@ -297,6 +310,70 @@ export default function StudioPage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Active Project Preview */}
+      {activeProject && (
+        <div className="bg-void-gray border border-green-500/20 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-green-400 flex items-center gap-2">
+              <Play size={14} /> Preview: {activeProject.name}
+            </h3>
+            <button onClick={() => setActiveProject(null)} className="text-white/30 hover:text-white text-xs">Close</button>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div><span className="text-white/40">Type:</span> <span className="text-white ml-2">{activeProject.type}</span></div>
+            <div><span className="text-white/40">Status:</span> <span className="text-white ml-2">{activeProject.status}</span></div>
+            <div className="col-span-2"><span className="text-white/40">Description:</span> <span className="text-white/70 ml-2">{activeProject.description || 'No description'}</span></div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { handlePublish(activeProject); setActiveProject(null) }}
+              className="flex items-center gap-2 bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-purple-500/30">
+              <Share2 size={12} /> Publish Now
+            </button>
+            <button onClick={() => handleExportFilmora(activeProject)}
+              className="flex items-center gap-2 bg-white/5 text-white/40 px-3 py-1.5 rounded-lg text-xs font-medium hover:text-white">
+              <Download size={12} /> Export Filmora
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Video Subagent Orchestrator */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Subagent Pipeline</h3>
+        <div className="bg-void-gray border border-white/5 rounded-xl p-5">
+          <p className="text-xs text-white/40 mb-4">Agents collaborate to create personalized video content. Each agent handles a stage of the pipeline.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { agent: 'Tina', role: 'Script Writer', desc: 'Writes scripts and dialogue', color: '#EC4899', step: 1 },
+              { agent: 'Creative', role: 'Visual Director', desc: 'Generates images via ComfyUI', color: '#A855F7', step: 2 },
+              { agent: 'Delivery', role: 'Render Pipeline', desc: 'Assembles & renders video', color: '#10B981', step: 3 },
+              { agent: 'Lozgic', role: 'Strategy & Publish', desc: 'Optimizes for platforms', color: '#3B82F6', step: 4 },
+            ].map(s => (
+              <div key={s.agent} className="bg-void-black border border-white/5 rounded-lg p-4 relative">
+                <div className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: `${s.color}15`, color: s.color }}>
+                  Step {s.step}
+                </div>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mb-2"
+                  style={{ backgroundColor: `${s.color}20`, color: s.color }}>
+                  {s.agent[0]}
+                </div>
+                <p className="text-sm font-medium text-white">{s.agent}</p>
+                <p className="text-[10px] font-medium mt-0.5" style={{ color: s.color }}>{s.role}</p>
+                <p className="text-[10px] text-white/30 mt-1">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 bg-neon-cyan text-void-black font-semibold px-4 py-2 rounded-lg text-sm hover:bg-neon-cyan/90">
+              <Zap size={14} /> Launch Pipeline
+            </button>
+            <span className="text-[10px] text-white/30">Creates a project and assigns subagents automatically</span>
+          </div>
+        </div>
       </div>
 
       {/* Ollama Models */}

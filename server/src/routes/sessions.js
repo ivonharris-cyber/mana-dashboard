@@ -7,10 +7,16 @@ const router = Router();
 // All routes require auth
 router.use(authMiddleware);
 
-// GET /api/sessions - list all sessions
+// GET /api/sessions - list all sessions (optionally filter by status)
 router.get('/', (req, res) => {
   try {
-    const sessions = db.prepare('SELECT * FROM sessions ORDER BY last_active DESC').all();
+    const status = req.query.status;
+    let sessions;
+    if (status) {
+      sessions = db.prepare('SELECT * FROM sessions WHERE status = ? ORDER BY last_active DESC').all(status);
+    } else {
+      sessions = db.prepare('SELECT * FROM sessions ORDER BY last_active DESC').all();
+    }
     res.json({ sessions });
   } catch (err) {
     console.error('[Sessions] List error:', err.message);

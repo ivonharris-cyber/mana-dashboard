@@ -24,9 +24,11 @@ router.get('/status', async (req, res) => {
     const runningBots = db.prepare("SELECT * FROM bot_processes WHERE status = 'running'").all();
 
     // Check local Ollama
+    const ollamaUrl = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
+    const vpsHost = process.env.VPS_HOST || '141.136.47.94';
     let localOllama = { status: 'offline', models: [] };
     try {
-      const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(3000) });
+      const resp = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
       const data = await resp.json();
       localOllama = { status: 'online', models: data.models?.map(m => m.name) || [] };
     } catch {}
@@ -34,7 +36,7 @@ router.get('/status', async (req, res) => {
     // Check VPS Ollama
     let vpsOllama = { status: 'offline', models: [] };
     try {
-      const resp = await fetch('http://141.136.47.94:11434/api/tags', { signal: AbortSignal.timeout(3000) });
+      const resp = await fetch(`http://${vpsHost}:11434/api/tags`, { signal: AbortSignal.timeout(3000) });
       const data = await resp.json();
       vpsOllama = { status: 'online', models: data.models?.map(m => m.name) || [] };
     } catch {}
@@ -51,7 +53,7 @@ router.get('/status', async (req, res) => {
     res.json({
       pipeline: {
         local: { ollama: localOllama, botsRunning: runningBots.filter(b => b.host === 'local').length },
-        vps: { ollama: vpsOllama, botsRunning: runningBots.filter(b => b.host === 'vps').length, ssh: 'root@141.136.47.94' },
+        vps: { ollama: vpsOllama, botsRunning: runningBots.filter(b => b.host === 'vps').length, ssh: `root@${vpsHost}` },
         cat62: { subnet: subnets.find(s => s.id === 'cat62'), botsRunning: runningBots.filter(b => b.host === 'cat62').length },
         tailscale: { subnet: subnets.find(s => s.id === 'tailscale-mesh') },
       },
@@ -76,7 +78,7 @@ router.post('/tunnel', async (req, res) => {
     return res.status(400).json({ error: 'localPort, remoteHost, remotePort required' });
   }
 
-  const ssh = sshTarget || 'root@141.136.47.94';
+  const ssh = sshTarget || `root@${process.env.VPS_HOST || '141.136.47.94'}`;
   const tunnelId = `${type || 'forward'}-${localPort}-${remotePort}`;
 
   if (tunnels.has(tunnelId)) {
@@ -233,7 +235,7 @@ router.post('/distribute', async (req, res) => {
 // ── POST /api/pipeline/kali/setup — set up Kali tunnel between cat62 and VPS ──
 router.post('/kali/setup', async (req, res) => {
   const { cat62Ip, vpsHost } = req.body;
-  const vps = vpsHost || 'root@141.136.47.94';
+  const vps = vpsHost || `root@${process.env.VPS_HOST || '141.136.47.94'}`;
 
   const results = { tunnels: [], errors: [] };
 

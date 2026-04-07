@@ -13,6 +13,7 @@ import NetworkPage from './pages/NetworkPage'
 import IslandPage from './pages/IslandPage'
 import StudioPage from './pages/StudioPage'
 import SystemPage from './pages/SystemPage'
+import HapaiPage from './pages/HapaiPage'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/island" element={<IslandPage />} />
         <Route path="/studio" element={<StudioPage />} />
         <Route path="/system" element={<SystemPage />} />
+        <Route path="/hapai" element={<HapaiPage />} />
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
       </Route>

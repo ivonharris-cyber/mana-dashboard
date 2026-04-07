@@ -87,8 +87,9 @@ router.post('/', (req, res) => {
       return res.status(409).json({ error: 'Agent with this id already exists' });
     }
 
-    const soulPath = `D:/AI/openclaw/agents/${id}/SOUL.md`;
-    const workspacePath = `D:/AI/openclaw/.openclaw/agents/${id}/workspace`;
+    const agentsBase = process.env.AGENTS_BASE_PATH || '/opt/mana-dashboard/agents';
+    const soulPath = `${agentsBase}/${id}/SOUL.md`;
+    const workspacePath = `${agentsBase}/${id}/workspace`;
 
     db.prepare(`
       INSERT INTO agents (id, name, display_name, model, color, role_desc, soul_path, workspace_path)
@@ -281,6 +282,43 @@ router.delete('/:id/memories/:memoryId', (req, res) => {
   } catch (err) {
     console.error('[Agents] Memory delete error:', err.message);
     res.status(500).json({ error: 'Failed to delete memory' });
+  }
+});
+
+// GET /api/agents/:id/history - get activity log + relay messages
+router.get('/:id/history', (req, res) => {
+  try {
+    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(req.params.id);
+    if (!agent) return res.status(404).json({ error: 'Agent not found' });
+
+    const limit = parseInt(req.query.limit) || 50;
+
+    // Activity log
+    const activity = db.prepare(
+      'SELECT * FROM agent_activity WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
+    ).all(req.params.id, limit);
+
+    // Relay messages involving this agent
+    const relays = db.prepare(
+      `SELECT * FROM relay_messages WHERE source = ? OR target = ? ORDER BY created_at DESC LIMIT ?`
+    ).all(req.params.id, req.params.id, limit);
+
+    // Bot process history
+    const bots = db.prepare(
+      'SELECT * FROM bot_processes WHERE agent_id = ? ORDER BY started_at DESC LIMIT 10'
+    ).all(req.params.id);
+
+    // Merge and sort by time
+    const timeline = [
+      ...activity.map(a => ({ ...a, _type: 'activity', _time: a.created_at })),
+      ...relays.map(r => ({ ...r, _type: 'relay', _time: r.created_at })),
+      ...bots.map(b => ({ ...b, _type: 'bot', _time: b.started_at || b.last_heartbeat })),
+    ].sort((a, b) => new Date(b._time).getTime() - new Date(a._time).getTime()).slice(0, limit);
+
+    res.json({ timeline, counts: { activity: activity.length, relays: relays.length, bots: bots.length } });
+  } catch (err) {
+    console.error('[Agents] History error:', err.message);
+    res.status(500).json({ error: 'Failed to get history' });
   }
 });
 

@@ -13,6 +13,10 @@ import {
   Brain,
   Plus,
   Trash2,
+  Clock,
+  MessageSquare,
+  Activity,
+  Server,
 } from 'lucide-react'
 
 interface Agent {
@@ -116,6 +120,11 @@ export default function AgentDetail() {
   const [newMemImportance, setNewMemImportance] = useState(3)
   const [memSaving, setMemSaving] = useState(false)
 
+  // History state
+  const [history, setHistory] = useState<any[]>([])
+  const [historyCounts, setHistoryCounts] = useState({ activity: 0, relays: 0, bots: 0 })
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'activity' | 'relay' | 'bot'>('all')
+
   const fetchAgent = useCallback(async () => {
     if (!id) return
     try {
@@ -165,12 +174,24 @@ export default function AgentDetail() {
     }
   }, [id])
 
+  const fetchHistory = useCallback(async () => {
+    if (!id) return
+    try {
+      const data = await api.get(`/agents/${id}/history`)
+      setHistory(data?.timeline || [])
+      setHistoryCounts(data?.counts || { activity: 0, relays: 0, bots: 0 })
+    } catch {
+      // no history yet
+    }
+  }, [id])
+
   useEffect(() => {
     fetchAgent()
     fetchSoul()
     fetchEvolution()
     fetchMemories()
-  }, [fetchAgent, fetchSoul, fetchEvolution, fetchMemories])
+    fetchHistory()
+  }, [fetchAgent, fetchSoul, fetchEvolution, fetchMemories, fetchHistory])
 
   async function handleSaveSoul() {
     if (!id) return
@@ -651,15 +672,75 @@ export default function AgentDetail() {
 
         {/* History Tab */}
         {activeTab === 'History' && (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                <RefreshCw size={24} className="text-white/20" />
-              </div>
-              <p className="text-white/40 text-sm">Task history coming soon</p>
-              <p className="text-white/20 text-xs mt-1">
-                Agent execution logs and task results will appear here
-              </p>
+          <div className="space-y-4">
+            {/* Filter bar */}
+            <div className="flex items-center gap-2">
+              {([
+                { key: 'all', label: 'All', count: history.length },
+                { key: 'activity', label: 'Activity', count: historyCounts.activity, icon: Activity },
+                { key: 'relay', label: 'Relay', count: historyCounts.relays, icon: MessageSquare },
+                { key: 'bot', label: 'Bots', count: historyCounts.bots, icon: Server },
+              ] as const).map(f => (
+                <button key={f.key} onClick={() => setHistoryFilter(f.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    historyFilter === f.key ? 'bg-neon-cyan/15 text-neon-cyan' : 'bg-white/5 text-white/40 hover:text-white/60'
+                  }`}>
+                  {f.label}
+                  <span className="text-[10px] opacity-60">{f.count}</span>
+                </button>
+              ))}
+              <button onClick={fetchHistory} className="ml-auto text-white/30 hover:text-white transition-colors">
+                <RefreshCw size={14} />
+              </button>
+            </div>
+
+            {/* Timeline */}
+            <div className="space-y-2">
+              {history.length === 0 ? (
+                <div className="text-center py-12">
+                  <Clock size={32} className="text-white/10 mx-auto mb-3" />
+                  <p className="text-sm text-white/30">No activity yet</p>
+                  <p className="text-xs text-white/20 mt-1">Chat with, deploy, or teach this agent to see history</p>
+                </div>
+              ) : (
+                history
+                  .filter(e => historyFilter === 'all' || e._type === historyFilter)
+                  .map((entry, i) => {
+                    const typeConfig: Record<string, { color: string; icon: typeof Activity; label: string }> = {
+                      activity: { color: '#22C55E', icon: Activity, label: entry.action || 'activity' },
+                      relay: { color: '#A855F7', icon: MessageSquare, label: `${entry.source} → ${entry.target}` },
+                      bot: { color: '#3B82F6', icon: Server, label: entry.status || 'process' },
+                    }
+                    const cfg = typeConfig[entry._type] || typeConfig.activity
+                    const Icon = cfg.icon
+                    const time = entry._time ? new Date(entry._time).toLocaleString() : ''
+                    return (
+                      <div key={`${entry._type}-${entry.id || i}`}
+                        className="bg-void-gray border border-white/5 rounded-lg p-3 flex items-start gap-3">
+                        <div className="p-1.5 rounded-lg shrink-0 mt-0.5" style={{ backgroundColor: `${cfg.color}15` }}>
+                          <Icon size={14} style={{ color: cfg.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: `${cfg.color}15`, color: cfg.color }}>
+                              {cfg.label}
+                            </span>
+                            {entry.xp_gained > 0 && (
+                              <span className="text-[10px] text-yellow-400/70 flex items-center gap-0.5">
+                                <Zap size={8} /> +{entry.xp_gained} XP
+                              </span>
+                            )}
+                            <span className="text-[10px] text-white/20 ml-auto">{time}</span>
+                          </div>
+                          <p className="text-sm text-white/60">
+                            {entry.detail || entry.content || entry.logs || 'No details'}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })
+              )}
             </div>
           </div>
         )}

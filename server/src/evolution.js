@@ -74,6 +74,16 @@ export function awardXP(db, agentId, action) {
     WHERE id = ?
   `).run(newXP, newLevel, newStage.id, newStage.memoryCapacity, newInteractions, agentId);
 
+  // Log activity
+  const detail = leveled
+    ? `Level up! Now Lv.${newLevel}${evolved ? ` — evolved to ${newStage.label}` : ''}`
+    : `+${reward} XP from ${action}`;
+  try {
+    db.prepare('INSERT INTO agent_activity (agent_id, action, detail, xp_gained) VALUES (?, ?, ?, ?)').run(
+      agentId, action, detail, reward
+    );
+  } catch { /* activity table may not exist yet on first run */ }
+
   const updated = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId);
 
   return { leveled, evolved, newLevel, newStage: newStage.id, agent: updated };
