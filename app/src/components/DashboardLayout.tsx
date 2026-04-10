@@ -16,10 +16,12 @@ import {
   Menu,
   X,
   Building2,
+  Zap,
 } from 'lucide-react'
 
 const navItems = [
   { label: 'Command Center', path: '/', icon: Home },
+  { label: 'Swarm Command', path: '/swarm', icon: Zap },
   { label: 'Agents', path: '/agents', icon: Bot },
   { label: 'Network', path: '/network', icon: Network },
   { label: 'Studio', path: '/studio', icon: Film },
@@ -34,6 +36,7 @@ const navItems = [
 
 const pageTitles: Record<string, string> = {
   '/': 'Command Center',
+  '/swarm': 'Swarm Command',
   '/agents': 'Agents',
   '/network': 'Network',
   '/studio': 'Production Studio',

@@ -23,6 +23,7 @@ import obsidianRoutes from './routes/obsidian.js';
 import studioRoutes from './routes/studio.js';
 import systemRoutes from './routes/system.js';
 import hapaiRoutes from './routes/hapai.js';
+import swarmRoutes from './routes/swarm.js';
 import { setBotIO, stopAllBots } from './bot-runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -121,6 +122,7 @@ app.use('/api/obsidian', obsidianRoutes);
 app.use('/api/studio', studioRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/hapai', hapaiRoutes);
+app.use('/api/swarm', swarmRoutes);
 
 // API health endpoint (no auth required)
 app.get('/api/health', (req, res) => {

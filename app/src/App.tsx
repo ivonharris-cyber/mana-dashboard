@@ -14,6 +14,7 @@ import IslandPage from './pages/IslandPage'
 import StudioPage from './pages/StudioPage'
 import SystemPage from './pages/SystemPage'
 import HapaiPage from './pages/HapaiPage'
+import SwarmCommand from './pages/SwarmCommand'
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/hapai" element={<HapaiPage />} />
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
+        <Route path="/swarm" element={<SwarmCommand />} />
       </Route>
     </Routes>
   )
