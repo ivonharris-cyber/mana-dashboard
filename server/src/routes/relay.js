@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 
@@ -10,7 +11,79 @@ export function setIO(socketIO) {
   io = socketIO;
 }
 
-// All routes require auth
+// Webhook rate limiter: 30 req/min
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Webhook rate limit exceeded. Max 30 requests per minute.' }
+});
+
+// Webhook auth middleware
+function webhookAuth(req, res, next) {
+  const secret = process.env.WEBHOOK_SECRET || '';
+  if (!secret) return next();
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Webhook authentication required' });
+  }
+  if (authHeader.split(' ')[1] !== secret) {
+    return res.status(403).json({ error: 'Invalid webhook token' });
+  }
+  next();
+}
+
+// ── Webhook for n8n agents to post relay messages (rate-limited + authed) ──
+router.post('/webhook', webhookLimiter, webhookAuth, (req, res) => {
+  try {
+    const { agent, task, output, source, type, content } = req.body;
+
+    // Support both direct relay format and n8n diary format
+    const msgSource = source || agent || 'n8n-agent';
+    const msgType = type || 'agent-diary';
+    const msgContent = content || `[${agent || 'Agent'}] ${task || ''}: ${(output || '').substring(0, 500)}`;
+
+    const result = db.prepare(
+      'INSERT INTO relay_messages (source, target, type, content, metadata) VALUES (?, ?, ?, ?, ?)'
+    ).run(
+      msgSource,
+      null,
+      msgType,
+      msgContent,
+      JSON.stringify({ agent, task, output: (output || '').substring(0, 1000), timestamp: new Date().toISOString() })
+    );
+
+    const message = db.prepare('SELECT * FROM relay_messages WHERE id = ?').get(result.lastInsertRowid);
+
+    // Also log to agent_activity if we have an agent_id
+    if (agent) {
+      const agentId = agent.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      try {
+        db.prepare(
+          'INSERT INTO agent_activity (agent_id, action, detail, xp_gained) VALUES (?, ?, ?, ?)'
+        ).run(agentId, 'task', (task || '').substring(0, 200), 10);
+
+        // Update agent status + XP
+        db.prepare(
+          'UPDATE agents SET status = ?, xp = xp + 10, total_interactions = total_interactions + 1 WHERE id = ?'
+        ).run('working', agentId);
+      } catch { /* agent may not exist in DB yet */ }
+    }
+
+    // Broadcast via Socket.IO
+    if (io) {
+      io.to('relay').emit('relay:message', message);
+    }
+
+    res.status(201).json({ logged: true, id: result.lastInsertRowid });
+  } catch (err) {
+    console.error('[Relay] Webhook error:', err.message);
+    res.status(500).json({ error: 'Failed to log relay message' });
+  }
+});
+
+// All other routes require auth
 router.use(authMiddleware);
 
 // GET /api/relay - list messages with optional filters

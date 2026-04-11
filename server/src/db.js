@@ -447,4 +447,39 @@ if (existingSubnetBots === 0) {
   console.log('[DB] Seeded 5 subnet bots (netwatch, gateway, cat62-keeper, relay-mesh, sentinel)');
 }
 
+// Seed 20 Mana n8n Skill Agents
+const manaAgentSeeds = [
+  { id: 'mana-seo', name: 'Mana SEO', color: '#00BFFF', role_desc: 'SEO keywords, meta optimization, content briefs' },
+  { id: 'mana-ecommerce', name: 'Mana E-Commerce', color: '#FFD700', role_desc: 'Product creation, pricing, inventory for 16 stores' },
+  { id: 'mana-social', name: 'Mana Social', color: '#FF69B4', role_desc: 'Multi-platform posting, hashtags, content calendar' },
+  { id: 'mana-content', name: 'Mana Content', color: '#9370DB', role_desc: 'Blogs, product descriptions, reel scripts, email copy' },
+  { id: 'mana-marketing', name: 'Mana Marketing', color: '#FF4500', role_desc: 'Ad campaigns, email funnels, conversion optimization' },
+  { id: 'mana-leads', name: 'Mana Leads', color: '#32CD32', role_desc: 'Lead scraping, qualification, outreach automation' },
+  { id: 'mana-cyber', name: 'Mana Cyber', color: '#00FF41', role_desc: 'Security audits, pen-test planning, compliance' },
+  { id: 'mana-dev', name: 'Mana Dev', color: '#00CED1', role_desc: 'Code generation, architecture, deployment' },
+  { id: 'mana-ai', name: 'Mana AI/ML', color: '#8A2BE2', role_desc: 'Model management, image/video pipelines, prompts' },
+  { id: 'mana-netops', name: 'Mana NetOps', color: '#20B2AA', role_desc: 'Infrastructure monitoring, Docker, Tailscale' },
+  { id: 'mana-design', name: 'Mana Design', color: '#FF1493', role_desc: 'UI/UX, brand assets, CSS, visual identity' },
+  { id: 'mana-support', name: 'Mana Support', color: '#FFA500', role_desc: 'Tickets, FAQ, retention, review management' },
+  { id: 'mana-bizdev', name: 'Mana BizDev', color: '#4169E1', role_desc: 'Partnerships, proposals, growth strategy' },
+  { id: 'mana-analytics', name: 'Mana Analytics', color: '#00FA9A', role_desc: 'Revenue dashboards, KPIs, Power BI' },
+  { id: 'mana-training', name: 'Mana Training', color: '#DAA520', role_desc: 'SOPs, courses, onboarding, knowledge base' },
+  { id: 'mana-compliance', name: 'Mana Compliance', color: '#CD853F', role_desc: 'Legislative compliance, privacy, consumer law' },
+  { id: 'mana-advocacy', name: 'Mana Advocacy', color: '#DB7093', role_desc: 'Empathetic communication, conflict resolution' },
+  { id: 'mana-maori', name: 'Mana Maori', color: '#228B22', role_desc: 'Te reo content, cultural IP, iwi engagement' },
+  { id: 'mana-youth', name: 'Mana Youth', color: '#FF6347', role_desc: 'Youth intervention, family support resources' },
+  { id: 'mana-veterans', name: 'Mana Veterans', color: '#556B2F', role_desc: 'Veteran support, military heritage content' },
+];
+
+for (const a of manaAgentSeeds) {
+  const exists = db.prepare('SELECT id FROM agents WHERE id = ?').get(a.id);
+  if (!exists) {
+    db.prepare(`
+      INSERT INTO agents (id, name, display_name, model, color, role_desc, host, subnet_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(a.id, a.name, a.name, 'llama3.1:8b', a.color, a.role_desc, 'vps', 'vps-main', 'online');
+    console.log(`[DB] Seeded Mana agent: ${a.id}`);
+  }
+}
+
 export default db;

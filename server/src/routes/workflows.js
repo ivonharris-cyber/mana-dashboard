@@ -8,29 +8,124 @@ router.use(authMiddleware);
 
 function getN8NConfig() {
   const n8nUrl = process.env.N8N_URL || 'http://localhost:5678';
-  const n8nAuth = process.env.N8N_AUTH || 'admin:trendweaver2026';
-  const basicAuth = Buffer.from(n8nAuth).toString('base64');
-  return { n8nUrl, basicAuth };
+  const n8nEmail = process.env.N8N_EMAIL || 'admin@ivonharris.com';
+  const n8nPassword = process.env.N8N_PASSWORD || 'ManaOps2026!';
+  return { n8nUrl, n8nEmail, n8nPassword };
+}
+
+// Session cookie cache — avoids re-login on every request
+let n8nSessionCookie = null;
+let n8nSessionExpiry = 0;
+
+async function n8nLogin() {
+  const { n8nUrl, n8nEmail, n8nPassword } = getN8NConfig();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(`${n8nUrl}/rest/login`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailOrLdapLoginId: n8nEmail,
+        password: n8nPassword
+      })
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`n8n login failed with ${response.status}: ${text}`);
+    }
+
+    // Extract session cookie from set-cookie header
+    const setCookie = response.headers.get('set-cookie') || response.headers.get('Set-Cookie');
+    if (setCookie) {
+      // Parse all cookies from the header (may be comma-separated or multiple headers)
+      const cookies = setCookie.split(/,(?=\s*\w+=)/).map(c => c.split(';')[0].trim());
+      n8nSessionCookie = cookies.join('; ');
+    }
+
+    // Cache for 55 minutes (n8n sessions typically last 1 hour)
+    n8nSessionExpiry = Date.now() + 55 * 60 * 1000;
+
+    console.log('[Workflows] n8n session established');
+    return n8nSessionCookie;
+  } catch (err) {
+    clearTimeout(timeout);
+    n8nSessionCookie = null;
+    n8nSessionExpiry = 0;
+    throw err;
+  }
+}
+
+async function getSessionCookie() {
+  if (n8nSessionCookie && Date.now() < n8nSessionExpiry) {
+    return n8nSessionCookie;
+  }
+  return await n8nLogin();
 }
 
 async function n8nFetch(path, options = {}) {
-  const { n8nUrl, basicAuth } = getN8NConfig();
+  const { n8nUrl } = getN8NConfig();
   const url = `${n8nUrl}${path}`;
+
+  // Get or refresh session cookie
+  let cookie;
+  try {
+    cookie = await getSessionCookie();
+  } catch (loginErr) {
+    throw new Error(`n8n login failed: ${loginErr.message}`);
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+    if (cookie) {
+      headers['Cookie'] = cookie;
+    }
+
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
-      headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      }
+      headers
     });
     clearTimeout(timeout);
+
+    // If 401/403, invalidate session and retry once
+    if (response.status === 401 || response.status === 403) {
+      n8nSessionCookie = null;
+      n8nSessionExpiry = 0;
+      const retryCookie = await n8nLogin();
+      const retryHeaders = { 'Content-Type': 'application/json', ...options.headers };
+      if (retryCookie) retryHeaders['Cookie'] = retryCookie;
+
+      const retryController = new AbortController();
+      const retryTimeout = setTimeout(() => retryController.abort(), 10000);
+      const retryResponse = await fetch(url, {
+        ...options,
+        signal: retryController.signal,
+        headers: retryHeaders
+      });
+      clearTimeout(retryTimeout);
+
+      if (!retryResponse.ok) {
+        const text = await retryResponse.text().catch(() => '');
+        throw new Error(`n8n responded with ${retryResponse.status} after re-login: ${text}`);
+      }
+
+      const contentType = retryResponse.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await retryResponse.json();
+      }
+      return await retryResponse.text();
+    }
 
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -59,7 +154,9 @@ router.get('/n8n-redirect', (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const data = await n8nFetch('/api/v1/workflows');
-    res.json(data);
+    // n8n v2 wraps response in { data: [...] } — normalize to flat array
+    const workflows = Array.isArray(data) ? data : (data?.data || data?.workflows || []);
+    res.json({ workflows });
   } catch (err) {
     console.error('[Workflows] List error:', err.message);
     res.status(502).json({

@@ -21,6 +21,100 @@ router.get('/', (req, res) => {
   }
 });
 
+// POST /api/agents/sync-n8n - sync agent status from n8n active workflows
+router.post('/sync-n8n', async (req, res) => {
+  try {
+    const n8nUrl = process.env.N8N_URL || 'http://localhost:5678';
+    const n8nEmail = process.env.N8N_EMAIL || 'admin@ivonharris.com';
+    const n8nPassword = process.env.N8N_PASSWORD || 'ManaOps2026!';
+
+    // Login to n8n
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    const loginRes = await fetch(`${n8nUrl}/rest/login`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        emailOrLdapLoginId: n8nEmail,
+        password: n8nPassword
+      })
+    });
+    clearTimeout(timeout);
+
+    if (!loginRes.ok) {
+      throw new Error(`n8n login failed: ${loginRes.status}`);
+    }
+
+    const setCookie = loginRes.headers.get('set-cookie') || loginRes.headers.get('Set-Cookie');
+    let cookie = '';
+    if (setCookie) {
+      const cookies = setCookie.split(/,(?=\s*\w+=)/).map(c => c.split(';')[0].trim());
+      cookie = cookies.join('; ');
+    }
+
+    // Fetch workflows
+    const wfController = new AbortController();
+    const wfTimeout = setTimeout(() => wfController.abort(), 10000);
+    const wfRes = await fetch(`${n8nUrl}/api/v1/workflows`, {
+      signal: wfController.signal,
+      headers: { 'Content-Type': 'application/json', 'Cookie': cookie }
+    });
+    clearTimeout(wfTimeout);
+
+    if (!wfRes.ok) {
+      throw new Error(`n8n workflows fetch failed: ${wfRes.status}`);
+    }
+
+    const wfData = await wfRes.json();
+    const workflows = Array.isArray(wfData) ? wfData : (wfData?.data || []);
+
+    // Find active workflow names that match Mana agents
+    const activeWorkflowNames = workflows
+      .filter(wf => wf.active)
+      .map(wf => wf.name.toLowerCase());
+
+    // Get all agents from DB
+    const agents = db.prepare('SELECT * FROM agents').all();
+    let updatedCount = 0;
+
+    const updateStmt = db.prepare('UPDATE agents SET status = ? WHERE id = ?');
+    const updateMany = db.transaction(() => {
+      for (const agent of agents) {
+        const agentName = (agent.name || '').toLowerCase();
+        const agentId = (agent.id || '').toLowerCase();
+
+        // Check if any active workflow name contains the agent name/id
+        // Also check for "mana-" prefixed agents matching "mana " or "mana-" workflow names
+        const hasActiveWorkflow = activeWorkflowNames.some(wfName =>
+          wfName.includes(agentName) ||
+          wfName.includes(agentId) ||
+          wfName.includes(agentId.replace(/-/g, ' ')) ||
+          (agentId.startsWith('mana-') && wfName.includes(agentId.replace('mana-', 'mana ')))
+        );
+
+        if (hasActiveWorkflow) {
+          updateStmt.run('online', agent.id);
+          updatedCount++;
+        }
+      }
+    });
+    updateMany();
+
+    console.log(`[Agents] n8n sync: ${updatedCount} agents marked online from ${activeWorkflowNames.length} active workflows`);
+    res.json({
+      success: true,
+      activeWorkflows: activeWorkflowNames.length,
+      agentsUpdated: updatedCount,
+      totalAgents: agents.length
+    });
+  } catch (err) {
+    console.error('[Agents] n8n sync error:', err.message);
+    res.status(502).json({ error: 'Failed to sync with n8n', details: err.message });
+  }
+});
+
 // GET /api/agents/:id - get single agent
 router.get('/:id', (req, res) => {
   try {
