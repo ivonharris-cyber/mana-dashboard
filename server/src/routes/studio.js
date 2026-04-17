@@ -5,11 +5,11 @@ import { authMiddleware } from '../middleware/auth.js';
 const router = Router();
 router.use(authMiddleware);
 
-const MOTHER_SHIP = process.env.MOTHER_SHIP_URL || 'http://127.0.0.1';
-const COMFYUI_URL = process.env.COMFYUI_URL || `${MOTHER_SHIP}:8188`;
-const BRANDULATE_URL = process.env.BRANDULATE_URL || `${MOTHER_SHIP}:4020`;
-const OLLAMA_URL = process.env.OLLAMA_URL || `${MOTHER_SHIP}:11434`;
-const N8N_URL = process.env.N8N_URL || `${MOTHER_SHIP}:5678`;
+const BEAST_URL = process.env.BEAST_URL || 'http://host.docker.internal';
+const COMFYUI_URL = process.env.COMFYUI_URL || `${BEAST_URL}:8188`;
+const BRANDULATE_URL = process.env.BRANDULATE_URL || `${BEAST_URL}:4020`;
+const OLLAMA_URL = process.env.OLLAMA_URL || `${BEAST_URL}:11434`;
+const N8N_URL = process.env.N8N_URL || 'http://host.docker.internal:5678';
 
 // ── Studio DB ────────────────────────────────────────────────────
 
