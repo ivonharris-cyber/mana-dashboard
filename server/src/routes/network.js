@@ -129,15 +129,16 @@ router.get('/discover', async (req, res) => {
       { name: 'mother-ship', ip: '100.119.206.43', os: 'linux' },
       { name: 'dauntless', ip: '100.95.62.64', os: 'linux' },
       { name: 's62-pro', ip: '100.120.233.93', os: 'android' },
-      { name: 'admin-ivon-ndi', ip: '100.98.189.48', os: 'windows' },
+      { name: 'admin-ivon-ndi', ip: '100.98.189.48', os: 'windows', checkPort: 18789 },
     ];
 
     const peerChecks = await Promise.allSettled(
       nodes.map(async (n) => {
-        const reachable = await probe(`http://${n.ip}:22`, 3000).catch(() => ({ ok: false }));
-        // For non-SSH nodes, try other ports
+        const port = n.checkPort || 22;
+        const reachable = await probe(`http://${n.ip}:${port}`, 3000).catch(() => ({ ok: false }));
         const online = reachable.ok || (await probe(`http://${n.ip}:9080`, 3000)).ok
-          || (await probe(`http://${n.ip}:5678`, 3000)).ok;
+          || (await probe(`http://${n.ip}:5678`, 3000)).ok
+          || (await probe(`http://${n.ip}:18789`, 3000)).ok;
         return { ...n, online, isCat62: n.name.includes('s62') };
       })
     );
