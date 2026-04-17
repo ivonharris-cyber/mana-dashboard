@@ -104,74 +104,126 @@ router.delete('/subnets/:id', (req, res) => {
   }
 });
 
-// GET /api/network/discover - discover Tailscale peers + local network
+// GET /api/network/discover - discover Tailscale, services, integrations
 router.get('/discover', async (req, res) => {
-  const results = { tailscale: null, local: null, errors: [] };
+  const results = { tailscale: null, local: null, services: {}, errors: [] };
 
-  // Tailscale discovery
+  async function probe(url, timeout = 5000) {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+      return { ok: resp.ok, status: resp.status };
+    } catch { return { ok: false, status: 0 }; }
+  }
+
+  async function probeJSON(url, timeout = 5000) {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch { return null; }
+  }
+
+  // Tailscale — known nodes, ping to check status
   try {
-    const { stdout } = await execAsync('tailscale status --json', { timeout: 5000 });
-    const data = JSON.parse(stdout);
-    const self = data.Self || {};
-    const peers = data.Peer ? Object.values(data.Peer) : [];
+    const nodes = [
+      { name: 'mother-ship', ip: '100.119.206.43', os: 'linux' },
+      { name: 'dauntless', ip: '100.95.62.64', os: 'linux' },
+      { name: 's62-pro', ip: '100.120.233.93', os: 'android' },
+      { name: 'admin-ivon-ndi', ip: '100.98.189.48', os: 'windows' },
+    ];
+
+    const peerChecks = await Promise.allSettled(
+      nodes.map(async (n) => {
+        const reachable = await probe(`http://${n.ip}:22`, 3000).catch(() => ({ ok: false }));
+        // For non-SSH nodes, try other ports
+        const online = reachable.ok || (await probe(`http://${n.ip}:9080`, 3000)).ok
+          || (await probe(`http://${n.ip}:5678`, 3000)).ok;
+        return { ...n, online, isCat62: n.name.includes('s62') };
+      })
+    );
 
     results.tailscale = {
       connected: true,
-      self: {
-        name: self.HostName,
-        ip: self.TailscaleIPs?.[0],
-        os: self.OS,
-        online: self.Online,
-      },
-      peers: peers.map((p) => ({
-        name: p.HostName,
-        ip: p.TailscaleIPs?.[0],
-        os: p.OS,
-        online: p.Online,
-        lastSeen: p.LastSeen,
-        isCat62: (p.HostName || '').toLowerCase().includes('cat62'),
-      })),
+      self: { name: 'mother-ship', ip: '100.119.206.43', os: 'linux' },
+      peers: peerChecks.map(p => p.status === 'fulfilled' ? p.value : { name: '?', ip: '?', os: '?', online: false, isCat62: false }),
     };
-
-    // Auto-update cat62 subnet if found
-    const cat62Peer = peers.find((p) => (p.HostName || '').toLowerCase().includes('cat62'));
-    if (cat62Peer) {
-      db.prepare('UPDATE subnets SET tailscale_ip = ?, status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?').run(
-        cat62Peer.TailscaleIPs?.[0] || null,
-        cat62Peer.Online ? 'online' : 'offline',
-        'cat62'
-      );
-    }
-
-    // Update tailscale-mesh subnet
-    db.prepare('UPDATE subnets SET tailscale_ip = ?, status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?').run(
-      self.TailscaleIPs?.[0] || null,
-      'online',
-      'tailscale-mesh'
-    );
   } catch (err) {
     results.tailscale = { connected: false, error: err.message };
     results.errors.push(`Tailscale: ${err.message}`);
   }
 
-  // Local network info
+  // Mana Node — real service health from Beast
   try {
-    const { stdout } = await execAsync('ipconfig', { timeout: 3000 });
-    const ipMatches = [...stdout.matchAll(/IPv4 Address[.\s]*:\s*([\d.]+)/gi)];
-    results.local = {
-      addresses: ipMatches.map((m) => m[1]),
-    };
-
-    // Update local-lan subnet
-    const lanIp = ipMatches.find((m) => m[1].startsWith('192.168.'));
-    if (lanIp) {
-      db.prepare('UPDATE subnets SET gateway = ?, status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?').run(
-        lanIp[1], 'online', 'local-lan'
-      );
+    const manaNode = await probeJSON('http://host.docker.internal:19080/status', 8000);
+    if (manaNode?.nodes) {
+      results.services.manaNode = {
+        status: 'online',
+        servicesUp: manaNode.nodes.filter(n => n.status === 'up').length,
+        servicesDown: manaNode.nodes.filter(n => n.status === 'down').length,
+        nodes: manaNode.nodes,
+      };
     }
-  } catch (err) {
-    results.errors.push(`Local: ${err.message}`);
-  }
+  } catch { results.errors.push('Mana Node unreachable'); }
+
+  // n8n
+  try {
+    const n8n = await probe('http://host.docker.internal:5678', 5000);
+    results.services.n8n = { status: n8n.ok ? 'online' : 'offline', port: 5678 };
+  } catch { results.services.n8n = { status: 'offline' }; }
+
+  // Slack — check API
+  try {
+    const slackToken = process.env.SLACK_BOT_TOKEN;
+    if (slackToken) {
+      const resp = await fetch('https://slack.com/api/auth.test', {
+        headers: { 'Authorization': `Bearer ${slackToken}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await resp.json();
+      results.services.slack = { status: data.ok ? 'online' : 'offline', team: data.team, user: data.user };
+    } else {
+      results.services.slack = { status: 'no_token' };
+    }
+  } catch { results.services.slack = { status: 'offline' }; }
+
+  // Notion — check connection
+  try {
+    const notionKey = process.env.NOTION_API_KEY;
+    if (notionKey) {
+      const resp = await fetch('https://api.notion.com/v1/users/me', {
+        headers: { 'Authorization': `Bearer ${notionKey}`, 'Notion-Version': '2022-06-28' },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await resp.json();
+      results.services.notion = { status: resp.ok ? 'online' : 'offline', name: data.name };
+    } else {
+      results.services.notion = { status: 'no_token' };
+    }
+  } catch { results.services.notion = { status: 'offline' }; }
+
+  // Ollama Beast
+  try {
+    const ollama = await probeJSON('http://host.docker.internal:18434/api/tags', 5000);
+    results.services.ollama = {
+      status: ollama ? 'online' : 'offline',
+      models: ollama?.models?.length || 0,
+    };
+  } catch { results.services.ollama = { status: 'offline' }; }
+
+  // Reel Pipeline
+  try {
+    const reel = await probeJSON(`http://148.230.100.223:7880/health`, 5000);
+    results.services.reelPipeline = {
+      status: reel?.status === 'ok' ? 'online' : 'offline',
+      reels: reel?.reels || null,
+    };
+  } catch { results.services.reelPipeline = { status: 'offline' }; }
+
+  // OpenClaw Beast
+  try {
+    const oc = await probe('http://148.230.100.223:64780', 5000);
+    results.services.openclawBeast = { status: oc.ok ? 'online' : 'offline' };
+  } catch { results.services.openclawBeast = { status: 'offline' }; }
 
   res.json(results);
 });
