@@ -8,7 +8,7 @@ import AgentDetail from './pages/AgentDetail'
 import RelayPage from './pages/RelayPage'
 import WorkflowsPage from './pages/WorkflowsPage'
 import ServicesPage from './pages/ServicesPage'
-import SessionsPage from './pages/SessionsPage'
+// SessionsPage removed — Telegram + n8n handle agent comms
 import NetworkPage from './pages/NetworkPage'
 import IslandPage from './pages/IslandPage'
 import StudioPage from './pages/StudioPage'
@@ -38,7 +38,6 @@ export default function App() {
         <Route path="/system" element={<SystemPage />} />
         <Route path="/hapai" element={<HapaiPage />} />
         <Route path="/services" element={<ServicesPage />} />
-        <Route path="/sessions" element={<SessionsPage />} />
         <Route path="/swarm" element={<SwarmCommand />} />
       </Route>
     </Routes>
