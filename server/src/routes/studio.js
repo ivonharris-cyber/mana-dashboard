@@ -134,8 +134,16 @@ router.post('/models', (req, res) => {
 
 router.get('/pipeline', async (req, res) => {
   try {
+    // Check ComfyUI via Mana Node health on Beast (avoids Docker networking issues)
+    const MANA_NODE = process.env.MANA_NODE_URL || 'http://host.docker.internal:9080';
     const [comfyui, brandulate, ollama] = await Promise.allSettled([
-      fetch(`${COMFYUI_URL}/system_stats`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()),
+      fetch(`${MANA_NODE}/status`, { signal: AbortSignal.timeout(8000) })
+        .then(r => r.json())
+        .then(data => {
+          const comfy = data.nodes?.find(n => n.name?.includes('ComfyUI'));
+          if (comfy?.status === 'up') return { status: 'online' };
+          throw new Error('ComfyUI down');
+        }),
       fetch(`${BRANDULATE_URL}/analytics`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()),
       fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()),
     ]);
