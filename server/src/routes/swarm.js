@@ -246,4 +246,54 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// ── Swarm Agent List ─────────────────────────────────────────────────────
+
+router.get('/agents', async (req, res) => {
+  try {
+    const agents = [
+      { name: 'Sarah Chen', role: 'Sales Director', department: 'sales', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Jade Nguyen', role: 'Account Exec Asia', department: 'sales', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Ly Tran', role: 'Brand Director', department: 'marketing', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Mei Lin', role: 'Social Media Manager', department: 'marketing', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Tina Reo', role: 'Campaign Manager', department: 'marketing', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Jordan Blake', role: 'SEO Specialist', department: 'seo', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Ana Patel', role: 'Support Lead', department: 'support', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Bonita', role: 'Executive Assistant', department: 'operations', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Shield', role: 'Security/DevOps', department: 'devops', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Grok', role: 'Creative Director', department: 'creative', model: 'gemini-2.5-flash', tier: 'officer' },
+      { name: 'Phoenix', role: 'Web Designer', department: 'creative', model: 'gemini-2.5-flash', tier: 'officer' },
+    ];
+    res.json({ agents, count: agents.length, source: 'mana-swarm' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Dispatch Task to Swarm Agent ─────────────────────────────────────────
+
+router.post('/dispatch', async (req, res) => {
+  try {
+    const { agent, task, from } = req.body;
+    if (!agent || !task) {
+      return res.status(400).json({ error: 'agent and task required' });
+    }
+
+    // Forward to swarm via dashboard relay Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      io.to('relay').emit('relay:message', {
+        source: from || 'dashboard',
+        target: `swarm:${agent}`,
+        type: 'task',
+        content: task,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    res.json({ dispatched: true, agent, task: task.substring(0, 200) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
